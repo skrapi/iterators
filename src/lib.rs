@@ -12,7 +12,8 @@ where
     O::Item: IntoIterator,
 {
     outer: O,
-    inner: Option<<O::Item as IntoIterator>::IntoIter>,
+    next_iter: Option<<O::Item as IntoIterator>::IntoIter>,
+    back_iter: Option<<O::Item as IntoIterator>::IntoIter>,
 }
 
 impl<O> Flatten<O>
@@ -23,7 +24,8 @@ where
     fn new(iter: O) -> Self {
         Flatten {
             outer: iter,
-            inner: None,
+            next_iter: None,
+            back_iter: None,
         }
     }
 }
@@ -36,15 +38,15 @@ where
     type Item = <O::Item as IntoIterator>::Item;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(ref mut inner_iter) = self.inner {
-                if let Some(i) = inner_iter.next() {
+            if let Some(ref mut next_iter) = self.next_iter {
+                if let Some(i) = next_iter.next() {
                     return Some(i);
                 }
-                self.inner = None;
+                self.next_iter = None;
             }
 
             let next_inner_item = self.outer.next()?.into_iter();
-            self.inner = Some(next_inner_item);
+            self.next_iter = Some(next_inner_item);
         }
     }
 }
@@ -118,11 +120,13 @@ mod tests {
     
     #[test]
     fn both_ends() {
-        let mut iter = flatten(vec![vec!["a", "b"], vec!["c", "d"]]);
-        assert_eq!(iter.next(), Some("a"));
-        assert_eq!(iter.next_back(), Some("d"));
-        assert_eq!(iter.next(), Some("b"));
-        assert_eq!(iter.next_back(), Some("c"));
+        let mut iter = flatten(vec![vec!["a1", "a2", "a3"], vec!["b1", "b2", "b3"]]);
+        assert_eq!(iter.next(), Some("a1"));
+        assert_eq!(iter.next_back(), Some("b3"));
+        assert_eq!(iter.next(), Some("a2"));
+        assert_eq!(iter.next_back(), Some("b2"));
+        assert_eq!(iter.next(), Some("a3"));
+        assert_eq!(iter.next_back(), Some("b1"));
         assert_eq!(iter.next(), None);
         assert_eq!(iter.next_back(), None);
     }
