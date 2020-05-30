@@ -1,9 +1,9 @@
-pub fn flatten<I>(iter: I) -> Flatten<I>
+pub fn flatten<I>(iter: I) -> Flatten<I::IntoIter>
 where
-    I: Iterator,
+    I: IntoIterator,
     I::Item: IntoIterator,
 {
-    Flatten::new(iter)
+    Flatten::new(iter.into_iter())
 }
 
 pub struct Flatten<O>
@@ -43,8 +43,28 @@ where
                 self.inner = None;
             }
 
-            
             let next_inner_item = self.outer.next()?.into_iter();
+            self.inner = Some(next_inner_item);
+        }
+    }
+}
+
+impl<O> DoubleEndedIterator for Flatten<O>
+where
+    O: Iterator + DoubleEndedIterator,
+    O::Item: IntoIterator,
+    <O::Item as IntoIterator>::IntoIter: DoubleEndedIterator,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(ref mut inner_iter) = self.inner {
+                if let Some(i) = inner_iter.next_back() {
+                    return Some(i);
+                }
+                self.inner = None;
+            }
+
+            let next_inner_item = self.outer.next_back()?.into_iter();
             self.inner = Some(next_inner_item);
         }
     }
@@ -60,10 +80,7 @@ mod tests {
 
     #[test]
     fn empty_wide() {
-        assert_eq!(
-            flatten(vec![Vec::<()>::new(), vec![], vec![]].into_iter()).count(),
-            0
-        );
+        assert_eq!(flatten(vec![Vec::<()>::new(), vec![], vec![]]).count(), 0);
     }
 
     #[test]
@@ -78,6 +95,35 @@ mod tests {
 
     #[test]
     fn two_wide() {
-        assert_eq!(flatten(vec![vec!["a"], vec!["b"]].into_iter()).count(), 2);
+        assert_eq!(flatten(vec![vec!["a"], vec!["b"]]).count(), 2);
+    }
+
+    #[test]
+    fn reverse() {
+        assert_eq!(flatten(std::iter::once(vec!["a", "b"]))
+        .rev()
+        .collect::<Vec<_>>(),
+        vec!["b", "a"]);
+    }
+
+    #[test]
+    fn reverse_wide() {
+        assert_eq!(
+            flatten(vec![vec!["a"], vec!["b"]])
+                .rev()
+                .collect::<Vec<_>>(), 
+            vec!["b", "a"]
+        );
+    }
+    
+    #[test]
+    fn both_ends() {
+        let mut iter = flatten(vec![vec!["a", "b"], vec!["c", "d"]]);
+        assert_eq!(iter.next(), Some("a"));
+        assert_eq!(iter.next_back(), Some("d"));
+        assert_eq!(iter.next(), Some("b"));
+        assert_eq!(iter.next_back(), Some("c"));
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next_back(), None);
     }
 }
