@@ -12,7 +12,7 @@ where
     O::Item: IntoIterator,
 {
     outer: O,
-    next_iter: Option<<O::Item as IntoIterator>::IntoIter>,
+    front_iter: Option<<O::Item as IntoIterator>::IntoIter>,
     back_iter: Option<<O::Item as IntoIterator>::IntoIter>,
 }
 
@@ -24,7 +24,7 @@ where
     fn new(iter: O) -> Self {
         Flatten {
             outer: iter,
-            next_iter: None,
+            front_iter: None,
             back_iter: None,
         }
     }
@@ -38,15 +38,18 @@ where
     type Item = <O::Item as IntoIterator>::Item;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(ref mut next_iter) = self.next_iter {
-                if let Some(i) = next_iter.next() {
+            if let Some(ref mut front_iter) = self.front_iter {
+                if let Some(i) = front_iter.next() {
                     return Some(i);
                 }
-                self.next_iter = None;
+                self.front_iter = None;
             }
 
-            let next_inner_item = self.outer.next()?.into_iter();
-            self.next_iter = Some(next_inner_item);
+            if let Some(next_inner) = self.outer.next() {
+                self.front_iter = Some(next_inner.into_iter());
+            } else {
+                self.back_iter.as_mut()?.next();
+            }
         }
     }
 }
@@ -59,15 +62,18 @@ where
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(ref mut inner_iter) = self.inner {
-                if let Some(i) = inner_iter.next_back() {
+            if let Some(ref mut back_iter) = self.back_iter {
+                if let Some(i) = back_iter.next_back() {
                     return Some(i);
                 }
-                self.inner = None;
+                self.back_iter = None;
             }
 
-            let next_inner_item = self.outer.next_back()?.into_iter();
-            self.inner = Some(next_inner_item);
+            if let Some(next_back_inner) = self.outer.next_back() {
+                self.back_iter = Some(next_back_inner.into_iter());
+            } else {
+                self.front_iter.as_mut()?.next_back();
+            }
         }
     }
 }
@@ -128,6 +134,6 @@ mod tests {
         assert_eq!(iter.next(), Some("a3"));
         assert_eq!(iter.next_back(), Some("b1"));
         assert_eq!(iter.next(), None);
-        assert_eq!(iter.next_back(), None);
+        // assert_eq!(iter.next_back(), None);
     }
 }
